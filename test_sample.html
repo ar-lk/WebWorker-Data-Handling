@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+<title>WebWorkers-Data Handling</title>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" type="text/css" href="./css/textcomplete.min.css" />
+<style>
+  #testelement{width: 100%;}
+  button{margin-top: 10px;}
+</style>
+</head>
+
+<body>
+  <div>
+    <textarea id="testelement" rows="5"></textarea>
+    <button type="button" onclick="updateDictionary()">UPDATE</button>
+  </div>
+
+  <script src="./js/jquery-2.1.1.js" type="text/javascript" charset="UTF-8"></script>
+  <script src="./js/jquery.textcomplete.min.js" type="text/javascript" charset="UTF-8"></script>
+
+	<script>
+		//onload data load to dictionary that stored in localstorage
+    var dictionaryData = (localStorage.getItem("dictionarydata")?(JSON.parse(localStorage.getItem("dictionarydata"))):[]);
+    //after pagedata loaded
+    $(document).ready(function(){
+      loadDictionaryToTextarea();
+    });
+    //initialize dictinary data to textarea using jquery-textcomplete plugin
+    function loadDictionaryToTextarea(){
+      $("#testelement").textcomplete('destroy');
+      $("#testelement").textcomplete([{
+          match: /(^|\b)(\w{1,})$/,
+          search: (term, callback) => {
+              var words = dictionaryData;
+              callback($.map(words, (word) => {
+                return word.toLowerCase().replace(/\./g, '').replace(/\s+/g, '').startsWith(term.toLowerCase().replace(/\./g, '').replace(/\s+/g, '')) === true? word : null;
+              }));
+          },
+          replace: function (word) {
+              return word + ' ';
+          }
+      }]);
+    }
+    //dictionarydata update function
+    function updateDictionary(){
+      var textareaTxt = $("#testelement").val(); //get textarea data
+      var txttoArray = textareaTxt.split(/(\s+)/).filter( e => e.trim().length > 0); //convert that text to array using spaces of text
+      $("#testelement").val(""); //clear textarea
+      //create new object to send webworker
+      var sendobj = new Object;
+      sendobj.oldlist = dictionaryData;
+      sendobj.newlist = txttoArray;
+      //initialize webworker file
+      var workerFor = new Worker('./webworkers/updatedictionary.js');
+      workerFor.postMessage(sendobj);
+      // listen to message event of worker
+      workerFor.onmessage = (event) => {
+        if(event != null && event.data != null && event.data.length > 0){
+          console.log(event.data); //let's see it works
+          dictionaryData = event.data; //update global variable data
+          localStorage.setItem("dictionarydata",JSON.stringify(event.data)); //update localstorage data
+          loadDictionaryToTextarea(); //reinitialize textarea data suggetions
+        }
+        workerFor.terminate(); workerFor = undefined; //this will kill created webworker, so we can use it again
+      };
+      // listen to error event of worker
+      workerFor.onerror = (event) => {
+        console.error('error received from workerFor => ', event); //in case if it's got any errors
+        workerFor.terminate(); workerFor = undefined;
+      };
+    }
+	</script>
+
+</body>
+</html>	
